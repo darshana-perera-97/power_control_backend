@@ -26,10 +26,8 @@ app.use(bodyParser.json());
 
 let dataArray = [];
 let lastOnlineStatus = null;
-let data1 = 1; // Global variable for data1
-let data2 = 1; // Global variable for data2
-let units = 1; // Global variable for data2
-let price = 100; // Global variable for data2
+let units = 1; // Global variable for units
+let tableData = Array(2).fill(Array(5).fill(0)); // Initialize a 2x5 array for table data
 
 const fetchData = async () => {
   try {
@@ -41,7 +39,6 @@ const fetchData = async () => {
 
     if (data && data.device1.online !== lastOnlineStatus) {
       lastOnlineStatus = data.device1.online;
-      // console.log(first)
 
       const currentDateTime = moment().tz("Asia/Colombo").format();
 
@@ -51,14 +48,29 @@ const fetchData = async () => {
       };
       units = data.device1.senergy;
 
-      price = Number(data1) + Number(data2) * units;
+      // Select the column based on the units range
+      let colIndex;
+      if (units >= 0 && units <= 30) {
+        colIndex = 0;
+      } else if (units >= 31 && units <= 60) {
+        colIndex = 1;
+      } else if (units >= 61 && units <= 90) {
+        colIndex = 2;
+      } else if (units >= 91 && units <= 120) {
+        colIndex = 3;
+      } else {
+        colIndex = 4;
+      }
+
+      const price =
+        Number(tableData[0][colIndex]) + units * Number(tableData[1][colIndex]);
       console.log(price);
 
       // Send mock data to Firebase
-      const mockPath = "cost"; // Define your mock path
-      var mockData = {
+      const mockPath = "cost";
+      const mockData = {
         price: price,
-      }; // Define your mock data
+      };
 
       await set(ref(database, mockPath), mockData); // Send mock data to Firebase
 
@@ -91,7 +103,6 @@ app.get("/data", async (req, res) => {
     };
 
     res.json(responseData);
-    // console.log(responseData);
   } catch (error) {
     console.error("Error fetching data:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -103,34 +114,52 @@ app.get("/dataset", (req, res) => {
 });
 
 app.post("/setCost", (req, res) => {
-  const { data1: newData1, data2: newData2 } = req.body;
+  const { data } = req.body;
 
-  console.log("Received data to set:", { newData1, newData2 });
+  console.log("Received data to set:", data);
 
-  data1 = newData1; // Update global data1
-  data2 = newData2; // Update global data2
+  tableData = data; // Update global tableData
 
   res.json({ success: true, message: "Cost data updated successfully" });
 });
 
-// Get Cost API
+// Modified /getCost API
 app.get("/getCost", (req, res) => {
-  if (data1 === undefined || data2 === undefined) {
+  if (!tableData || tableData.length === 0) {
     return res
       .status(400)
       .json({ success: false, message: "Cost data not set" });
   }
 
-  const result = Number(data1) + Number(data2) * units;
+  let colIndex;
+  if (units >= 0 && units <= 30) {
+    colIndex = 0;
+  } else if (units >= 31 && units <= 60) {
+    colIndex = 1;
+  } else if (units >= 61 && units <= 90) {
+    colIndex = 2;
+  } else if (units >= 91 && units <= 120) {
+    colIndex = 3;
+  } else {
+    colIndex = 4;
+  }
+
+  const result =
+    Number(tableData[0][colIndex]) + units * Number(tableData[1][colIndex]);
 
   console.log("Calculated result:", result);
 
   res.json({ success: true, result });
 });
 
-// Endpoint to get global data1 and data2
+// Endpoint to get global table data
 app.get("/globalData", (req, res) => {
-  res.json({ data1, data2 });
+  res.json({ tableData });
+});
+
+// Endpoint to get the data in tableData
+app.get("/testCost", (req, res) => {
+  res.json({ tableData });
 });
 
 const PORT = process.env.PORT || 3002;
