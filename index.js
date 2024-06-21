@@ -162,6 +162,24 @@ app.get("/testCost", (req, res) => {
   res.json({ tableData });
 });
 
+// New endpoint to set value
+app.post("/setValue", async (req, res) => {
+  const { value } = req.body;
+
+  console.log(typeof value);
+
+  try {
+    const valuePath = "set/val"; // Update this path as necessary
+    await set(ref(database, valuePath), parseFloat(value));
+
+    res.json({ success: true, message: "Value updated successfully" });
+    console.log(value);
+  } catch (error) {
+    console.error("Error setting value:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
