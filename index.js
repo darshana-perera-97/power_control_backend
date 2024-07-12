@@ -26,7 +26,8 @@ app.use(bodyParser.json());
 
 let dataArray = [];
 let lastOnlineStatus = null;
-let state = true;
+let state = "offline";
+let time = "";
 let data1 = 1; // Global variable for data1
 let data2 = 1; // Global variable for data2
 let units = 1; // Global variable for units
@@ -40,15 +41,20 @@ const fetchData = async () => {
     });
     const data = snapshot.val();
 
+    if (data && data.device1.online === lastOnlineStatus) {
+      // state = false;
+      state = "Offline";
+    }
     if (data && data.device1.online !== lastOnlineStatus) {
-      state = true;
       lastOnlineStatus = data.device1.online;
+      state = "Active";
 
       const currentDateTime = moment().tz("Asia/Colombo").format();
-
+      time = currentDateTime;
+      console.log(time);
       const responseData = {
         data,
-        timestamp: currentDateTime,
+        timestamp: time,
       };
       units = data.device1.senergy;
 
@@ -56,7 +62,6 @@ const fetchData = async () => {
       const parsedData1 = Number(data1);
       const parsedData2 = Number(data2);
       const parsedUnits = Number(units);
-
       if (!isNaN(parsedData1) && !isNaN(parsedData2) && !isNaN(parsedUnits)) {
         price = parsedData1 + parsedData2 * parsedUnits;
         console.log(price);
@@ -78,14 +83,17 @@ const fetchData = async () => {
         dataArray.shift();
       }
     } else {
-      state = false;
+      // console.log(state);
+      // state = false;
+      // console.log(state);
     }
+    console.log(state);
   } catch (error) {
     console.error("Error fetching data:", error);
   }
 };
 
-setInterval(fetchData, 2000);
+setInterval(fetchData, 3000);
 
 app.get("/data", async (req, res) => {
   try {
@@ -100,7 +108,7 @@ app.get("/data", async (req, res) => {
     const responseData = {
       data,
       state: state,
-      timestamp: currentDateTime,
+      timestamp: time,
     };
 
     res.json(responseData);
