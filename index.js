@@ -26,8 +26,11 @@ app.use(bodyParser.json());
 
 let dataArray = [];
 let lastOnlineStatus = null;
+let state = true;
+let data1 = 1; // Global variable for data1
+let data2 = 1; // Global variable for data2
 let units = 1; // Global variable for units
-let tableData = Array(2).fill(Array(5).fill(0)); // Initialize a 2x5 array for table data
+let price = 100; // Global variable for price
 
 const fetchData = async () => {
   try {
@@ -38,6 +41,7 @@ const fetchData = async () => {
     const data = snapshot.val();
 
     if (data && data.device1.online !== lastOnlineStatus) {
+      state = true;
       lastOnlineStatus = data.device1.online;
 
       const currentDateTime = moment().tz("Asia/Colombo").format();
@@ -48,44 +52,40 @@ const fetchData = async () => {
       };
       units = data.device1.senergy;
 
-      // Select the column based on the units range
-      let colIndex;
-      if (units >= 0 && units <= 30) {
-        colIndex = 0;
-      } else if (units >= 31 && units <= 60) {
-        colIndex = 1;
-      } else if (units >= 61 && units <= 90) {
-        colIndex = 2;
-      } else if (units >= 91 && units <= 120) {
-        colIndex = 3;
+      // Ensure data1 and data2 are numbers before performing calculations
+      const parsedData1 = Number(data1);
+      const parsedData2 = Number(data2);
+      const parsedUnits = Number(units);
+
+      if (!isNaN(parsedData1) && !isNaN(parsedData2) && !isNaN(parsedUnits)) {
+        price = parsedData1 + parsedData2 * parsedUnits;
+        console.log(price);
+
+        // Send mock data to Firebase
+        const mockPath = "cost"; // Define your mock path
+        const mockData = {
+          price: price,
+        }; // Define your mock data
+
+        await set(ref(database, mockPath), mockData); // Send mock data to Firebase
       } else {
-        colIndex = 4;
+        console.error("Invalid data for calculation:", { data1, data2, units });
       }
-
-      const price =
-        Number(tableData[0][colIndex]) + units * Number(tableData[1][colIndex]);
-      console.log(price);
-
-      // Send mock data to Firebase
-      const mockPath = "cost";
-      const mockData = {
-        price: price,
-      };
-
-      await set(ref(database, mockPath), mockData); // Send mock data to Firebase
 
       dataArray.push(responseData);
 
       if (dataArray.length > 1000) {
         dataArray.shift();
       }
+    } else {
+      state = false;
     }
   } catch (error) {
     console.error("Error fetching data:", error);
   }
 };
 
-setInterval(fetchData, 1000);
+setInterval(fetchData, 2000);
 
 app.get("/data", async (req, res) => {
   try {
@@ -99,6 +99,7 @@ app.get("/data", async (req, res) => {
 
     const responseData = {
       data,
+      state: state,
       timestamp: currentDateTime,
     };
 
@@ -112,72 +113,63 @@ app.get("/data", async (req, res) => {
 app.get("/dataset", (req, res) => {
   res.json(dataArray);
 });
+app.post("/setValue", (req, res) => {
+  const { value } = req.body;
 
-app.post("/setCost", (req, res) => {
-  const { data } = req.body;
+  // Perform any necessary validation
+  if (typeof value !== "number") {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid data provided" });
+  }
 
-  console.log("Received data to set:", data);
+  // Handle the value as needed
+  console.log("Received value to set:", value);
 
-  tableData = data; // Update global tableData
-
-  res.json({ success: true, message: "Cost data updated successfully" });
+  // Update your Firebase or any other storage here
+  const setValRef = ref(database, "set/val");
+  set(setValRef, value)
+    .then(() => {
+      res.json({ success: true, message: "Value set successfully" });
+    })
+    .catch((error) => {
+      console.error("Error setting value:", error);
+      res.status(500).json({ success: false, message: "Error setting value" });
+    });
 });
 
-// Modified /getCost API
+app.post("/setCost", (req, res) => {
+  const { data1: newData1, data2: newData2 } = req.body;
+
+  console.log("Received data to set:", { newData1, newData2 });
+
+  if (!isNaN(newData1) && !isNaN(newData2)) {
+    data1 = Number(newData1); // Update global data1
+    data2 = Number(newData2); // Update global data2
+    res.json({ success: true, message: "Cost data updated successfully" });
+  } else {
+    res.status(400).json({ success: false, message: "Invalid data provided" });
+  }
+});
+
+// Get Cost API
 app.get("/getCost", (req, res) => {
-  if (!tableData || tableData.length === 0) {
+  if (data1 === undefined || data2 === undefined) {
     return res
       .status(400)
       .json({ success: false, message: "Cost data not set" });
   }
 
-  let colIndex;
-  if (units >= 0 && units <= 30) {
-    colIndex = 0;
-  } else if (units >= 31 && units <= 60) {
-    colIndex = 1;
-  } else if (units >= 61 && units <= 90) {
-    colIndex = 2;
-  } else if (units >= 91 && units <= 120) {
-    colIndex = 3;
-  } else {
-    colIndex = 4;
-  }
-
-  const result =
-    Number(tableData[0][colIndex]) + units * Number(tableData[1][colIndex]);
+  const result = Number(data1) + Number(data2) * units;
 
   console.log("Calculated result:", result);
 
   res.json({ success: true, result });
 });
 
-// Endpoint to get global table data
+// Endpoint to get global data1 and data2
 app.get("/globalData", (req, res) => {
-  res.json({ tableData });
-});
-
-// Endpoint to get the data in tableData
-app.get("/testCost", (req, res) => {
-  res.json({ tableData });
-});
-
-// New endpoint to set value
-app.post("/setValue", async (req, res) => {
-  const { value } = req.body;
-
-  console.log(typeof value);
-
-  try {
-    const valuePath = "set/val"; // Update this path as necessary
-    await set(ref(database, valuePath), parseFloat(value));
-
-    res.json({ success: true, message: "Value updated successfully" });
-    console.log(value);
-  } catch (error) {
-    console.error("Error setting value:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
+  res.json({ data1, data2 });
 });
 
 const PORT = process.env.PORT || 3002;
